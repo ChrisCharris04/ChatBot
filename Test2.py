@@ -8,7 +8,7 @@ from langchain.chains import RetrievalQA
 from transformers import pipeline
 
 # Load and split the document
-loader = TextLoader("/Users/Chris/Downloads/diffie.pdf")
+loader = TextLoader("Your Pdf Path")
 documents = loader.load()
 
 # Chunking for better retrieval
