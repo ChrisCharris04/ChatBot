@@ -1,35 +1,73 @@
-from langchain.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.llms import HuggingFacePipeline
-from langchain.chains import RetrievalQA
-from transformers import pipeline
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.llms import HuggingFaceHub
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 
-# Load and split the document
-loader = TextLoader("example.txt")  # Replace with your file
-documents = loader.load()
+#  Loading PDF
+def load_pdf(pdf_path):
+    loader = PyPDFLoader(pdf_path)
+    documents = loader.load()
+    return documents
 
-# Chunking for better retrieval
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-chunks = text_splitter.split_documents(documents)
+#  Splitting text into chunks
+def chunk_text(documents):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = text_splitter.split_documents(documents)
+    return chunks
 
-# Use a Hugging Face model for embeddings
-embedding_model = "sentence-transformers/all-MiniLM-L6-v2"  # Optimal balance of speed and accuracy
-embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
 
-# Store in Chroma DB
-vector_store = Chroma.from_documents(chunks, embeddings)
+#  ChromaDB vector store
+def create_vector_db(chunks):
+    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    vector_db = Chroma.from_documents(chunks, embedding_model)
+    return vector_db
 
-# Load Hugging Face model for LLM
-llm_pipeline = pipeline("text-generation", model="mistralai/Mistral-7B-Instruct-v0.1")
-llm = HuggingFacePipeline(pipeline=llm_pipeline)
+#  Hugging Face LLM
+def setup_chatbot(vector_db):
+    llm = HuggingFaceHub(
+        repo_id = "meta-llama/Llama-3.1-8B",
+        #repo_id = "tiiuae/falcon-7b-instruct",
+        model_kwargs={"temperature": 0.7, "max_length": 512},
+        huggingfacehub_api_token="Your Api Key"
+    )
 
-# Create a RetrievalQA chain
-qa_chain = RetrievalQA.from_chain_type(llm, retriever=vector_store.as_retriever())
+    prompt_template = PromptTemplate(
+        input_variables=["user_input"],
+        template="Given the input: '{user_input}', generate three relevant follow-up questions."
+    )
 
-# Query the chatbot
-query = "What does the document say about X?"
-response = qa_chain.run(query)
-print(response)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+    chatbot = ConversationalRetrievalChain.from_llm(
+        llm=llm, retriever=vector_db.as_retriever(), memory =memory, prompt =prompt_template
+    )
+    return chatbot
+
+#  ChatBot and Querying
+def chat_with_bot(chatbot):
+    print("Chatbot is ready! Type 'exit' to stop.")
+    while True:
+        query = input("You: ")
+        if query.lower() == "exit":
+            print("Thank You!Bye")
+            break
+        #response = chatbot.run(query)
+        #print(f"Chatbot: {response}")
+
+        response = chatbot.run(user_input)
+        print(f"Chatbot:\n{response}")
+
+# Main function
+if __name__ == "__main__":
+    pdf_path = "/content/Sample2.pdf"
+    documents = load_pdf(pdf_path)
+    chunks = chunk_text(documents)
+    vector_db = create_vector_db(chunks)
+    chatbot = setup_chatbot(vector_db)
+    chat_with_bot(chatbot)
 
