@@ -64,7 +64,7 @@ def chat_with_bot(chatbot):
         print(f"Chatbot: {response}")
 
 if __name__ == "__main__":
-    pdf_path = "//Users//Chris//Downloads//diffie.pdf"
+    pdf_path = "Your Path"
     documents = load_pdf(pdf_path)
     chunks = chunk_text(documents)
     vector_db = create_vector_db(chunks)
